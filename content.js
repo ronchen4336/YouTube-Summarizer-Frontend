@@ -6,41 +6,26 @@ const SUMMARY_BUTTON_ID = 'yt-summarizer-btn';
 const SUMMARY_PANEL_ID = 'yt-summarizer-panel';
 const PERSISTENT_PANEL_ID = 'yt-persistent-summary-panel';
 
+// Add a flag to track initialization
+let isInitialized = false;
+
 // Create and inject the summary button
 function createSummaryButton() {
-    // Check if button already exists to prevent duplicates
-    if (document.getElementById(SUMMARY_BUTTON_ID)) {
-        return;
-    }
-    
+    // Create the button
     const button = document.createElement('button');
-    button.id = SUMMARY_BUTTON_ID;
-    button.className = 'yt-summarizer-button';
-    button.title = 'Generate Video Summary';
+    button.className = 'ytp-button yt-summarizer-button';
+    button.innerHTML = `
+        <span style="font-size: 16px; margin-right: 4px;">✨</span>
+        <span style="font-size: 13px;">Summarize</span>
+    `;
     
-    const iconSpan = document.createElement('span');
-    iconSpan.className = 'yt-summarizer-icon';
-    iconSpan.textContent = '✨'; // Using a sparkle emoji as it suggests AI/magic
-    
-    const textSpan = document.createElement('span');
-    textSpan.className = 'yt-summarizer-text';
-    textSpan.textContent = 'Summarize';
-    
-    button.appendChild(iconSpan);
-    button.appendChild(textSpan);
+    // Add click handler
     button.addEventListener('click', handleSummarizeClick);
     
-    // Create a container to add our button without replacing existing controls
-    const container = document.createElement('div');
-    container.className = 'yt-summarizer-container';
-    container.appendChild(button);
-    
-    // Find the YouTube player controls
-    const controls = document.querySelector('.ytp-right-controls');
-    if (controls) {
-        // Insert our container before the first child
-        controls.insertBefore(container, controls.firstChild);
-        console.log('Summary button added to YouTube player controls');
+    // Add to player controls
+    const rightControls = document.querySelector('.ytp-right-controls');
+    if (rightControls) {
+        rightControls.insertBefore(button, rightControls.firstChild);
     }
 }
 
@@ -68,12 +53,10 @@ function createPersistentPanel() {
     
     const minimizeButton = document.createElement('button');
     minimizeButton.className = 'yt-summarizer-minimize';
-    minimizeButton.innerHTML = '_';
     minimizeButton.title = 'Minimize';
     
     const closeButton = document.createElement('button');
     closeButton.className = 'yt-summarizer-close';
-    closeButton.innerHTML = '×';
     closeButton.title = 'Close';
     
     controls.appendChild(minimizeButton);
@@ -89,13 +72,8 @@ function createPersistentPanel() {
     // Add event listeners
     minimizeButton.addEventListener('click', () => {
         panel.classList.toggle('minimized');
-        if (panel.classList.contains('minimized')) {
-            minimizeButton.innerHTML = '□';
-            minimizeButton.title = 'Restore';
-        } else {
-            minimizeButton.innerHTML = '_';
-            minimizeButton.title = 'Minimize';
-        }
+        minimizeButton.classList.toggle('minimized');
+        minimizeButton.title = panel.classList.contains('minimized') ? 'Restore' : 'Minimize';
     });
     
     closeButton.addEventListener('click', () => {
@@ -179,9 +157,7 @@ function displayPersistentSummary(summaryData) {
             switch (section.metadata?.display_hint) {
                 case 'highlight':
                     contentElement.className = 'highlight';
-                    contentElement.textContent = Array.isArray(section.body_content) 
-                        ? section.body_content[0] 
-                        : section.body_content;
+                    contentElement.textContent = section.body_content[0];
                     break;
                     
                 case 'bullet_list':
@@ -195,48 +171,15 @@ function displayPersistentSummary(summaryData) {
                     contentElement.appendChild(ul);
                     break;
                     
-                case 'tag_cloud':
-                    contentElement.className = 'tag-cloud';
-                    section.body_content.forEach(tag => {
-                        const span = document.createElement('span');
-                        span.className = 'tag';
-                        span.textContent = tag;
-                        contentElement.appendChild(span);
-                    });
-                    break;
-                    
-                case 'blockquote':
-                    section.body_content.forEach(quote => {
-                        const blockquote = document.createElement('blockquote');
-                        blockquote.className = 'blockquote';
-                        blockquote.textContent = quote;
-                        contentElement.appendChild(blockquote);
-                    });
-                    break;
-                    
-                case 'italic_text':
-                    const ul2 = document.createElement('ul');
-                    ul2.className = 'bullet-list';
-                    section.body_content.forEach(item => {
-                        const li = document.createElement('li');
-                        li.style.fontStyle = 'italic';
-                        li.textContent = item;
-                        ul2.appendChild(li);
-                    });
-                    contentElement.appendChild(ul2);
-                    break;
-                    
+                case 'paragraph':
                 default:
                     contentElement.className = 'paragraph';
-                    if (Array.isArray(section.body_content)) {
-                        section.body_content.forEach(text => {
-                            const p = document.createElement('p');
-                            p.textContent = text;
-                            contentElement.appendChild(p);
-                        });
-                    } else {
-                        contentElement.textContent = section.body_content;
-                    }
+                    section.body_content.forEach(text => {
+                        const p = document.createElement('p');
+                        p.textContent = text;
+                        contentElement.appendChild(p);
+                    });
+                    break;
             }
             
             sectionElement.appendChild(contentElement);
@@ -391,22 +334,26 @@ function createContentElement(content, displayHint) {
 
 // Initialize the extension
 function initialize() {
-    console.log('Initializing YouTube Summarizer extension');
-    const currentUrl = window.location.href;
-    
-    if (isYouTubeVideoUrl(currentUrl)) {
-        console.log('YouTube video detected, adding summarize button');
-        
-        if (!document.querySelector('.ytp-right-controls')) {
-            console.log('YouTube player controls not found, waiting...');
-            setTimeout(createSummaryButton, 2000);
-        } else {
-            createSummaryButton();
-        }
+    const rightControls = document.querySelector('.ytp-right-controls');
+    if (rightControls) {
+        createSummaryButton();
     } else {
-        console.log('Not a YouTube video page, skipping button creation');
+        // If controls aren't found, try again in a second
+        setTimeout(initialize, 1000);
     }
 }
+
+// Start when page loads
+initialize();
+
+// Handle YouTube's dynamic navigation
+let lastUrl = location.href;
+new MutationObserver(() => {
+    if (location.href !== lastUrl) {
+        lastUrl = location.href;
+        initialize();
+    }
+}).observe(document, {subtree: true, childList: true});
 
 // Listen for messages from popup/service worker
 browserAPI.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -427,13 +374,6 @@ browserAPI.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 });
-
-// Start the extension when the page loads
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initialize);
-} else {
-    initialize();
-}
 
 // Function to request cookie permissions
 async function requestCookiePermissions() {
@@ -476,10 +416,17 @@ async function handleSummarizeClick() {
         panel = panel || createPersistentPanel();
         const content = panel.querySelector('.yt-summarizer-panel-content');
         
+        // Create new loading animation
         content.innerHTML = `
             <div class="loading-container">
-                <div class="spinner"></div>
-                <p>Processing video...</p>
+                <div class="spinner">
+                    <div class="spinner-circle"></div>
+                    <div class="spinner-circle"></div>
+                    <div class="spinner-circle"></div>
+                </div>
+                <p class="loading-text">
+                    Analyzing video content<span class="loading-dots"></span>
+                </p>
             </div>
         `;
 
