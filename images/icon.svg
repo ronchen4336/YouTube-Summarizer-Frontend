@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background Circle -->
+    <circle cx="64" cy="64" r="60" fill="#1a73e8"/>
+    
+    <!-- Play Button -->
+    <path d="M45 40 L88 64 L45 88 Z" fill="white"/>
+    
+    <!-- Summary Lines -->
+    <rect x="35" y="90" width="58" height="4" rx="2" fill="white"/>
+    <rect x="35" y="98" width="48" height="4" rx="2" fill="white"/>
+    <rect x="35" y="106" width="42" height="4" rx="2" fill="white"/>
+</svg> 

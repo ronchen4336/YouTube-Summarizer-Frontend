@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Summarizer</title>
+    <style>
+        :root {
+            --primary-color: #1a73e8;
+            --secondary-color: #f8f9fa;
+            --text-color: #202124;
+            --border-color: #dadce0;
+        }
+        
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            width: 350px;
+            margin: 0;
+            padding: 0;
+            color: var(--text-color);
+            background-color: white;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1a73e8, #1557b0);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 0 0 4px 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            font-size: 18px;
+            margin: 0;
+            font-weight: 500;
+            letter-spacing: 0.25px;
+        }
+        
+        .header p {
+            font-size: 14px;
+            margin: 8px 0 0;
+            opacity: 0.9;
+        }
+        
+        .message-container {
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .message-container p {
+            color: #5f6368;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 0;
+        }
+        
+        .message-container .icon {
+            font-size: 24px;
+            margin-bottom: 12px;
+        }
+        
+        .no-video-message {
+            padding: 24px;
+            text-align: center;
+            color: #5f6368;
+        }
+        
+        footer {
+            text-align: center;
+            font-size: 12px;
+            color: #5f6368;
+            padding: 12px;
+            border-top: 1px solid var(--border-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>YouTube Video Summarizer</h1>
+        <p>AI-powered summary of the current video</p>
+    </div>
+    
+    <div id="message-container" class="message-container">
+        <div class="icon">✨</div>
+        <p>Your video summary will appear in a panel on the YouTube page.</p>
+    </div>
+    
+    <div id="no-video-message" class="no-video-message" style="display: none;">
+        <p>Please navigate to a YouTube video to generate a summary.</p>
+    </div>
+    
+    <footer>
+        <p>Made with ❤️ | Version <span id="version">1.0.0</span></p>
+    </footer>
+    
+    <script src="popup.js"></script>
+</body>
+</html> 
