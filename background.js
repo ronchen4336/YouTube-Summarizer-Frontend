@@ -1,5 +1,37 @@
 // Background script for YouTube Video Summarizer
 
+const OFFSCREEN_DOCUMENT_PATH = '/offscreen.html';
+let creatingOffscreenDocument;
+
+async function hasDocument() {
+  const matchedClients = await clients.matchAll();
+  return matchedClients.some(
+    (c) => c.url === chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH)
+  );
+}
+
+async function setupOffscreenDocument(path) {
+  if (!(await hasDocument())) {
+    if (creatingOffscreenDocument) {
+      await creatingOffscreenDocument;
+    } else {
+      creatingOffscreenDocument = chrome.offscreen.createDocument({
+        url: path,
+        reasons: [chrome.offscreen.Reason.DOM_SCRAPING],
+        justification: 'authentication'
+      });
+      await creatingOffscreenDocument;
+      creatingOffscreenDocument = null;
+    }
+  }
+}
+
+async function closeOffscreenDocument() {
+  if (await hasDocument()) {
+    await chrome.offscreen.closeDocument();
+  }
+}
+
 // Handle clicks on the extension icon
 chrome.action.onClicked.addListener((tab) => {
   // Only trigger on YouTube video pages
@@ -24,12 +56,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     try {
       const videoUrl = request.videoUrl;
       
-      // Get YouTube cookies
+      // Only request essential cookies needed for transcript access
       chrome.cookies.getAll({ domain: '.youtube.com' }, (cookies) => {
-        // Format cookies into a string
-        const cookieString = cookies
-          .map(cookie => `${cookie.name}=${cookie.value}`)
-          .join('; ');
+        // Only include cookies required for transcript access
+        const essentialCookies = cookies.filter(cookie => 
+            ['CONSENT', 'VISITOR_INFO1_LIVE'].includes(cookie.name)
+        );
+        const cookieString = essentialCookies
+            .map(cookie => `${cookie.name}=${cookie.value}`)
+            .join('; ');
         
         // Send to backend with cookies
         fetch('https://youtube-summarizer-445521.appspot.com/summarize', {
@@ -53,7 +88,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         })
         .catch(error => {
           console.error('API request failed:', error);
-          sendResponse({ success: false, error: error.message });
+          sendResponse({ 
+            success: false, 
+            error: "We're having trouble generating your summary. Please try again in a few minutes." 
+          });
         });
       });
       
@@ -64,4 +102,71 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
   }
-}); 
+
+  if (request.action === 'checkAuth') {
+    handleAuth(false, sendResponse);
+    return true;
+  }
+  
+  if (request.action === 'authenticate') {
+    handleAuth(true, sendResponse);
+    return true;
+  }
+});
+
+async function handleAuth(interactive, sendResponse) {
+  try {
+    // Get auth token using chrome.identity
+    const token = await new Promise((resolve, reject) => {
+      chrome.identity.getAuthToken({ interactive }, (token) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+          return;
+        }
+        resolve(token);
+      });
+    });
+
+    sendResponse({ 
+      success: true, 
+      isAuthenticated: !!token,
+      token: token 
+    });
+  } catch (error) {
+    console.error('Auth error:', error);
+    if (interactive) {
+      // Only try offscreen auth if interactive login was requested
+      await setupOffscreenDocument(OFFSCREEN_DOCUMENT_PATH);
+      try {
+        const response = await chrome.runtime.sendMessage({
+          target: 'offscreen',
+          type: 'firebase-auth'
+        });
+        
+        if (response?.name === 'FirebaseError') {
+          throw response;
+        }
+        
+        sendResponse({ 
+          success: true, 
+          isAuthenticated: true, 
+          token: response.user?.accessToken 
+        });
+      } catch (offscreenError) {
+        sendResponse({ 
+          success: false, 
+          isAuthenticated: false, 
+          error: offscreenError.message 
+        });
+      } finally {
+        await closeOffscreenDocument();
+      }
+    } else {
+      sendResponse({ 
+        success: false, 
+        isAuthenticated: false, 
+        error: error.message 
+      });
+    }
+  }
+} 

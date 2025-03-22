@@ -1,0 +1,6 @@
+{
+  "key": "YOUR_EXTENSION_KEY",
+  "oauth2": {
+    "client_id": "YOUR_DEV_CLIENT_ID.apps.googleusercontent.com"
+  }
+} 

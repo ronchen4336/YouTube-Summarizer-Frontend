@@ -4,14 +4,20 @@
   "version": "1.0.0",
   "description": "Get AI-powered summaries of YouTube videos with key points, characters, and quotes",
   "permissions": [
+    "identity",
+    "identity.email",
+    "offscreen",
     "cookies",
     "storage",
     "activeTab",
     "scripting"
   ],
   "host_permissions": [
-    "*://*.youtube.com/*",
-    "https://youtube-summarizer-445521.appspot.com/*"
+    "https://www.youtube.com/*",
+    "https://youtube-summarizer-445521.appspot.com/*",
+    "https://apis.google.com/*",
+    "https://www.googleapis.com/*",
+    "https://securetoken.googleapis.com/*"
   ],
   "background": {
     "service_worker": "dist/background.bundle.js"
@@ -38,8 +44,18 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["styles.css"],
+      "resources": ["styles.css", "offscreen.html"],
       "matches": ["https://www.youtube.com/*"]
     }
-  ]
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "oauth2": {
+    "client_id": "478857864492-2bc5hirum73o0o1ju6fei3m4c3rjhr06.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile"
+    ]
+  }
 } 

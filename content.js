@@ -9,6 +9,24 @@ const PERSISTENT_PANEL_ID = 'yt-persistent-summary-panel';
 // Add a flag to track initialization
 let isInitialized = false;
 
+const LOADING_MESSAGES = [
+    "Negotiating with YouTube's algorithm... 🤝",
+    "Bribing the AI to summarize faster... 🍩🤖",
+    "Convincing videos to spill the tea... ☕️",
+    "Filtering clickbait, almost there... 🎣",
+    "Teaching the bots how to speed-read... 📖🤖",
+    "Distracting YouTube ads while we sneak past... 🕵️‍♀️",
+    "Compressing hours into seconds—magic! 🪄✨",
+    "Wrestling the video into submission... 🤼",
+    "Avoiding cat videos—promise! 🐱❌",
+    "Stealing secrets from the video ninjas... 🥷",
+    "Tickling bytes for a faster summary... 🤭💻",
+    "Snacking on boring parts, yum... 🍽️🥱",
+    "Convincing creators we watched everything... 🤐👀",
+    "Hacking into video wisdom... ethically! 🧑‍💻😇",
+    "Loading wit and charm into summaries... 🎩✨"
+];
+
 // Create and inject the summary button
 function createSummaryButton() {
     // Create the button
@@ -333,12 +351,11 @@ function createContentElement(content, displayHint) {
 }
 
 // Initialize the extension
-function initialize() {
+async function initialize() {
     const rightControls = document.querySelector('.ytp-right-controls');
     if (rightControls) {
         createSummaryButton();
     } else {
-        // If controls aren't found, try again in a second
         setTimeout(initialize, 1000);
     }
 }
@@ -406,17 +423,11 @@ async function handleSummarizeClick() {
     try {
         console.log('Summarize button clicked');
         
-        const currentUrl = window.location.href;
-        if (!isYouTubeVideoUrl(currentUrl)) {
-            alert('This button only works on YouTube video pages');
-            return;
-        }
-        
+        // Create or get panel first
         let panel = document.getElementById(PERSISTENT_PANEL_ID);
         panel = panel || createPersistentPanel();
         const content = panel.querySelector('.yt-summarizer-panel-content');
         
-        // Create new loading animation
         content.innerHTML = `
             <div class="loading-container">
                 <div class="spinner">
@@ -424,27 +435,77 @@ async function handleSummarizeClick() {
                     <div class="spinner-circle"></div>
                     <div class="spinner-circle"></div>
                 </div>
-                <p class="loading-text">
-                    Analyzing video content<span class="loading-dots"></span>
-                </p>
+                <p class="loading-text" id="loading-message">Checking authentication...</p>
             </div>
         `;
 
-        // Let the background script handle everything (including cookies)
-        const response = await browserAPI.runtime.sendMessage({
+        // Check auth status
+        const authResponse = await chrome.runtime.sendMessage({ action: 'checkAuth' });
+        console.log('Auth check response:', authResponse);
+
+        if (!authResponse.isAuthenticated) {
+            content.innerHTML = `
+                <div class="login-content">
+                    <h2>Sign in Required</h2>
+                    <p>Please sign in with your Google account to use the YouTube Summarizer</p>
+                    <button class="login-button">Sign in with Google</button>
+                </div>
+            `;
+
+            const loginButton = content.querySelector('.login-button');
+            loginButton.addEventListener('click', async () => {
+                try {
+                    const authResult = await chrome.runtime.sendMessage({ action: 'authenticate' });
+                    if (authResult.success) {
+                        handleSummarizeClick(); // Retry after successful authentication
+                    } else {
+                        throw new Error('Authentication failed');
+                    }
+                } catch (error) {
+                    console.error('Login failed:', error);
+                    content.innerHTML = `
+                        <div class="error-message">
+                            <div class="error-icon">❌</div>
+                            <p>Authentication failed. Please try again.</p>
+                        </div>
+                    `;
+                }
+            });
+            return;
+        }
+
+        // Continue with video summary if authenticated
+        // First check if we're on a YouTube video
+        const currentUrl = window.location.href;
+        if (!isYouTubeVideoUrl(currentUrl)) {
+            alert('This button only works on YouTube video pages');
+            return;
+        }
+
+        // Start rotating messages for loading state
+        let messageIndex = 0;
+        const messageElement = content.querySelector('#loading-message');
+        const messageInterval = setInterval(() => {
+            messageElement.textContent = LOADING_MESSAGES[messageIndex];
+            messageIndex = (messageIndex + 1) % LOADING_MESSAGES.length;
+        }, 3000);
+
+        // Request video summary
+        const response = await chrome.runtime.sendMessage({
             action: 'getYouTubeVideo',
             videoUrl: currentUrl
         });
+
+        clearInterval(messageInterval);
 
         if (!response.success) {
             throw new Error(response.error || 'Failed to process video');
         }
 
-        // Display the summary
         displayPersistentSummary(response.data);
         
     } catch (error) {
-        console.error('Error in summarize process:', error);
+        console.error('Error:', error);
         
         const panel = document.getElementById(PERSISTENT_PANEL_ID);
         if (panel) {
@@ -452,14 +513,17 @@ async function handleSummarizeClick() {
             if (content) {
                 content.innerHTML = `
                     <div class="error-message">
-                        <p>❌ Error: ${error.message}</p>
-                        <p>Please try again later.</p>
+                        <div class="error-icon">❌</div>
+                        <div class="error-content">
+                            <p>${error.message.includes('sign in') ? error.message : 'Unable to generate summary'}</p>
+                            <p>${error.message.includes('sign in') ? '' : 'Please try again in a few minutes'}</p>
+                        </div>
                     </div>
                 `;
             }
         }
         
-        browserAPI.runtime.sendMessage({
+        chrome.runtime.sendMessage({
             action: 'log_error',
             error: `Summarize error: ${error.message}`
         });
@@ -477,3 +541,6 @@ function isYouTubeVideoUrl(url) {
     const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})(&.*)?$/;
     return youtubeRegex.test(url);
 }
+
+// Add this near the top of content.js
+window.handleSummarizeClick = handleSummarizeClick;
