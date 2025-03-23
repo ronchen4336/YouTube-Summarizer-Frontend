@@ -3,7 +3,7 @@
   "name": "YouTube Video Summarizer",
   "version": "1.0.0",
   "description": "Get AI-powered summaries of YouTube videos with key points, characters, and quotes",
-  "privacy_policy_url": "https://youtube-summarizer-445521.appspot.com/privacy_policy",
+  "privacy_policy_url": "https://youtube-summarizer-445521.ue.r.appspot.com/privacy_policy",
   "permissions": [
     "identity",
     "identity.email",
