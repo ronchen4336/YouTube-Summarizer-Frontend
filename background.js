@@ -50,7 +50,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             .filter(cookie => ['CONSENT', 'VISITOR_INFO1_LIVE'].includes(cookie.name))
             .map(cookie => `${cookie.name}=${cookie.value}`)
             .join('; ');
-          console.log('Cookie String:', cookieString);
+          
           fetch('https://youtube-summarizer-445521.appspot.com/summarize', {
             method: 'POST',
             headers: {
@@ -62,15 +62,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               cookies: cookieString
             })
           })
-          .then(response => response.text())
-          .then(responseText => {
-            console.log('API Response Text:', responseText);
-            const data = JSON.parse(responseText);
-            console.log('Parsed API Response:', data);
+          .then(response => response.json())
+          .then(data => {
             sendResponse({ success: true, data: data });
           })
-          .catch(error => {
-            console.error('API request failed:', error);
+          .catch(() => {
             sendResponse({
               success: false,
               error: "We're having trouble generating your summary. Please try again in a few minutes."
@@ -78,9 +74,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           });
         });
       })
-      .catch(error => {
-        console.error('Error getting auth token:', error);
-        sendResponse({ success: false, error: error.message });
+      .catch(() => {
+        sendResponse({ 
+          success: false, 
+          error: "Authentication failed. Please try again." 
+        });
       });
 
     return true;
@@ -98,7 +96,6 @@ function handleAuth(interactive, sendResponse) {
       });
     })
     .catch(error => {
-      console.error('Auth error:', error.message);
       sendResponse({ 
         success: false, 
         isAuthenticated: false, 
@@ -108,6 +105,4 @@ function handleAuth(interactive, sendResponse) {
 }
 
 // Installation handler
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('YouTube Video Summarizer extension installed');
-}); 
+chrome.runtime.onInstalled.addListener(() => {}); 
