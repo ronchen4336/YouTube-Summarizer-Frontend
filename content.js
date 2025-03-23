@@ -122,23 +122,61 @@ function displayPersistentSummary(summaryData) {
             console.error('Panel content area not found');
             return;
         }
-        
-        let summaryContent;
-        
-        // Handle the response format
-        if (summaryData.response) {
-            try {
-                summaryContent = JSON.parse(summaryData.response);
-            } catch (parseError) {
-                console.error('Error parsing response:', parseError);
-                throw new Error('Invalid response format');
+
+        // First check if this is an error response from the backend
+        if (summaryData.error || summaryData.data?.error) {
+            const errorData = summaryData.data || summaryData;
+            
+            // Handle free trial limit error specifically
+            if (errorData.error === 'Free trial limit reached') {
+                content.innerHTML = `
+                    <div class="error-message">
+                        <div class="error-icon">ℹ️</div>
+                        <div class="error-content">
+                            <h3>Free Trial Limit Reached</h3>
+                            <p>You have used all 3 free summaries.</p>
+                            <p style="margin-top: 12px;">We're working on adding new subscription tiers with increased usage limits! 
+                            For early access or increased limits, please email:</p>
+                            <a href="mailto:ronaldchen4236@gmail.com" 
+                               style="color: #2196F3; text-decoration: underline; display: block; margin-top: 8px;">
+                               ronaldchen4236@gmail.com
+                            </a>
+                        </div>
+                    </div>
+                `;
+                return;
             }
+
+            // Handle other API errors with a generic message
+            content.innerHTML = `
+                <div class="error-message">
+                    <div class="error-icon">❌</div>
+                    <div class="error-content">
+                        <p>Unable to generate summary. Please try again later.</p>
+                        <button class="login-button" style="margin-top: 16px;">Try Again</button>
+                    </div>
+                </div>
+            `;
+            
+            const retryButton = content.querySelector('.login-button');
+            if (retryButton) {
+                retryButton.addEventListener('click', handleSummarizeClick);
+            }
+            return;
+        }
+        
+        // Continue with normal summary display if no errors
+        let summaryContent;
+        if (summaryData.response) {
+            summaryContent = JSON.parse(summaryData.response);
+        } else if (typeof summaryData === 'object' && summaryData.data) {
+            summaryContent = summaryData.data;
         } else if (typeof summaryData === 'object' && summaryData.title && summaryData.body) {
             summaryContent = summaryData;
         } else {
-            throw new Error('Unrecognized response format');
+            throw new Error('Invalid response format');
         }
-        
+
         // Clear existing content
         content.innerHTML = '';
         
@@ -214,16 +252,20 @@ function displayPersistentSummary(summaryData) {
             if (content) {
                 content.innerHTML = `
                     <div class="error-message">
-                        <p>❌ Error displaying summary: ${error.message}</p>
+                        <div class="error-icon">❌</div>
+                        <div class="error-content">
+                            <p>Unable to display summary. Please try again later.</p>
+                            <button class="login-button" style="margin-top: 16px;">Try Again</button>
+                        </div>
                     </div>
                 `;
+                
+                const retryButton = content.querySelector('.login-button');
+                if (retryButton) {
+                    retryButton.addEventListener('click', handleSummarizeClick);
+                }
             }
         }
-        
-        browserAPI.runtime.sendMessage({
-            action: 'log_error',
-            error: `Display error: ${error.message}`
-        });
     }
 }
 
@@ -566,20 +608,41 @@ async function handleSummarizeClick() {
         if (panel) {
             const content = panel.querySelector('.yt-summarizer-panel-content');
             if (content) {
-                content.innerHTML = `
-                    <div class="error-message">
-                        <div class="error-icon">❌</div>
-                        <div class="error-content">
-                            <p>${error.message}</p>
-                            <button class="login-button" style="margin-top: 16px;">Try Again</button>
+                // Check if it's the free trial limit error
+                if (error.message?.includes('Free trial limit') || 
+                    (typeof error === 'object' && error.error === 'Free trial limit reached')) {
+                    content.innerHTML = `
+                        <div class="error-message">
+                            <div class="error-icon">ℹ️</div>
+                            <div class="error-content">
+                                <h3>Free Trial Limit Reached</h3>
+                                <p>You have used all 3 free summaries.</p>
+                                <p style="margin-top: 12px;">We're working on adding new subscription tiers with increased usage limits! 
+                                For early access or increased limits, please email:</p>
+                                <a href="mailto:ronaldchen4236@gmail.com" 
+                                   style="color: #2196F3; text-decoration: underline; display: block; margin-top: 8px;">
+                                   ronaldchen4236@gmail.com
+                                </a>
+                            </div>
                         </div>
-                    </div>
-                `;
-                
-                // Add click handler for the retry button
-                const retryButton = content.querySelector('.login-button');
-                if (retryButton) {
-                    retryButton.addEventListener('click', handleSummarizeClick);
+                    `;
+                } else {
+                    // Original error handling for other errors
+                    content.innerHTML = `
+                        <div class="error-message">
+                            <div class="error-icon">❌</div>
+                            <div class="error-content">
+                                <p>${error.message}</p>
+                                <button class="login-button" style="margin-top: 16px;">Try Again</button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Add click handler for the retry button
+                    const retryButton = content.querySelector('.login-button');
+                    if (retryButton) {
+                        retryButton.addEventListener('click', handleSummarizeClick);
+                    }
                 }
             }
         }
