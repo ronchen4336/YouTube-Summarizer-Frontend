@@ -423,27 +423,25 @@ async function handleSummarizeClick() {
     try {
         console.log('Summarize button clicked');
         
-        // Create or get panel first
-        let panel = document.getElementById(PERSISTENT_PANEL_ID);
-        panel = panel || createPersistentPanel();
-        const content = panel.querySelector('.yt-summarizer-panel-content');
-        
-        content.innerHTML = `
-            <div class="loading-container">
-                <div class="spinner">
-                    <div class="spinner-circle"></div>
-                    <div class="spinner-circle"></div>
-                    <div class="spinner-circle"></div>
-                </div>
-                <p class="loading-text" id="loading-message">Checking authentication...</p>
-            </div>
-        `;
+        // Check authentication first
+        const authResponse = await new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage({ action: 'checkAuth' }, (response) => {
+                if (chrome.runtime.lastError) {
+                    reject(chrome.runtime.lastError);
+                } else {
+                    resolve(response);
+                }
+            });
+        });
 
-        // Check auth status
-        const authResponse = await chrome.runtime.sendMessage({ action: 'checkAuth' });
         console.log('Auth check response:', authResponse);
 
         if (!authResponse.isAuthenticated) {
+            // Show login prompt if not authenticated
+            let panel = document.getElementById(PERSISTENT_PANEL_ID);
+            panel = panel || createPersistentPanel();
+            const content = panel.querySelector('.yt-summarizer-panel-content');
+            
             content.innerHTML = `
                 <div class="login-content">
                     <h2>Sign in Required</h2>
@@ -455,54 +453,111 @@ async function handleSummarizeClick() {
             const loginButton = content.querySelector('.login-button');
             loginButton.addEventListener('click', async () => {
                 try {
-                    const authResult = await chrome.runtime.sendMessage({ action: 'authenticate' });
+                    content.innerHTML = `
+                        <div class="loading-container">
+                            <div class="spinner">
+                                <div class="spinner-circle"></div>
+                            </div>
+                            <p>Signing in...</p>
+                        </div>
+                    `;
+                    
+                    const authResult = await new Promise((resolve, reject) => {
+                        chrome.runtime.sendMessage({ action: 'authenticate' }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                reject(chrome.runtime.lastError);
+                            } else if (!response || response.error) {
+                                reject(new Error(response?.error || 'Authentication failed'));
+                            } else {
+                                resolve(response);
+                            }
+                        });
+                    });
+
                     if (authResult.success) {
                         handleSummarizeClick(); // Retry after successful authentication
                     } else {
-                        throw new Error('Authentication failed');
+                        throw new Error(authResult.error || 'Authentication failed');
                     }
                 } catch (error) {
                     console.error('Login failed:', error);
                     content.innerHTML = `
                         <div class="error-message">
                             <div class="error-icon">❌</div>
-                            <p>Authentication failed. Please try again.</p>
+                            <p>${error.message}</p>
+                            <button class="login-button" style="margin-top: 16px;">Try Again</button>
                         </div>
                     `;
+                    
+                    const retryButton = content.querySelector('.login-button');
+                    if (retryButton) {
+                        retryButton.addEventListener('click', handleSummarizeClick);
+                    }
                 }
             });
             return;
         }
 
         // Continue with video summary if authenticated
-        // First check if we're on a YouTube video
-        const currentUrl = window.location.href;
-        if (!isYouTubeVideoUrl(currentUrl)) {
-            alert('This button only works on YouTube video pages');
-            return;
-        }
+        let panel = document.getElementById(PERSISTENT_PANEL_ID);
+        panel = panel || createPersistentPanel();
+        const content = panel.querySelector('.yt-summarizer-panel-content');
+        
+        // Create loading container with all elements
+        const loadingContainer = document.createElement('div');
+        loadingContainer.className = 'loading-container';
+        loadingContainer.innerHTML = `
+            <div class="spinner">
+                <div class="spinner-circle"></div>
+                <div class="spinner-circle"></div>
+                <div class="spinner-circle"></div>
+            </div>
+            <p id="loading-message" class="loading-text">${LOADING_MESSAGES[0]}</p>
+        `;
+        
+        // Clear existing content and add loading container
+        content.innerHTML = '';
+        content.appendChild(loadingContainer);
 
-        // Start rotating messages for loading state
+        // Get message element after it's added to DOM
+        const messageElement = loadingContainer.querySelector('#loading-message');
         let messageIndex = 0;
-        const messageElement = content.querySelector('#loading-message');
         const messageInterval = setInterval(() => {
-            messageElement.textContent = LOADING_MESSAGES[messageIndex];
-            messageIndex = (messageIndex + 1) % LOADING_MESSAGES.length;
+            // Double check element still exists
+            if (messageElement && document.body.contains(messageElement)) {
+                messageIndex = (messageIndex + 1) % LOADING_MESSAGES.length;
+                messageElement.textContent = LOADING_MESSAGES[messageIndex];
+            } else {
+                clearInterval(messageInterval);
+            }
         }, 3000);
 
-        // Request video summary
-        const response = await chrome.runtime.sendMessage({
-            action: 'getYouTubeVideo',
-            videoUrl: currentUrl
-        });
+        try {
+            const currentUrl = window.location.href;
+            console.log('Current URL:', currentUrl);
+            if (!currentUrl.includes('youtube.com/watch')) {
+                throw new Error('Not a YouTube video page');
+            }
+            
+            const response = await chrome.runtime.sendMessage({
+                action: 'getYouTubeVideo',
+                videoUrl: currentUrl
+            });
+            console.log('Video summary response:', response);
 
-        clearInterval(messageInterval);
+            clearInterval(messageInterval);
 
-        if (!response.success) {
-            throw new Error(response.error || 'Failed to process video');
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to process video');
+            }
+
+            console.log('Displaying summary data:', response.data);
+            displayPersistentSummary(response.data);
+        } catch (error) {
+            console.error('Summary request failed:', error);
+            clearInterval(messageInterval);
+            throw error;
         }
-
-        displayPersistentSummary(response.data);
         
     } catch (error) {
         console.error('Error:', error);
@@ -515,18 +570,19 @@ async function handleSummarizeClick() {
                     <div class="error-message">
                         <div class="error-icon">❌</div>
                         <div class="error-content">
-                            <p>${error.message.includes('sign in') ? error.message : 'Unable to generate summary'}</p>
-                            <p>${error.message.includes('sign in') ? '' : 'Please try again in a few minutes'}</p>
+                            <p>${error.message}</p>
+                            <button class="login-button" style="margin-top: 16px;">Try Again</button>
                         </div>
                     </div>
                 `;
+                
+                // Add click handler for the retry button
+                const retryButton = content.querySelector('.login-button');
+                if (retryButton) {
+                    retryButton.addEventListener('click', handleSummarizeClick);
+                }
             }
         }
-        
-        chrome.runtime.sendMessage({
-            action: 'log_error',
-            error: `Summarize error: ${error.message}`
-        });
     }
 }
 

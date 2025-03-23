@@ -6,7 +6,6 @@
   "permissions": [
     "identity",
     "identity.email",
-    "offscreen",
     "cookies",
     "storage",
     "activeTab",
@@ -14,10 +13,8 @@
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
-    "https://youtube-summarizer-445521.appspot.com/*",
-    "https://apis.google.com/*",
-    "https://www.googleapis.com/*",
-    "https://securetoken.googleapis.com/*"
+    "http://localhost:3000/*",
+    "https://www.googleapis.com/*"
   ],
   "background": {
     "service_worker": "dist/background.bundle.js"
@@ -44,7 +41,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["styles.css", "offscreen.html"],
+      "resources": ["styles.css"],
       "matches": ["https://www.youtube.com/*"]
     }
   ],
