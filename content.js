@@ -109,19 +109,13 @@ function createPersistentPanel() {
 // Display summary in the persistent panel
 function displayPersistentSummary(summaryData) {
     try {
-        console.log('Displaying persistent summary:', summaryData);
-        
-        // Create or get panel
         let panel = document.getElementById(PERSISTENT_PANEL_ID);
         if (!panel) {
             panel = createPersistentPanel();
         }
         
         const content = panel.querySelector('.yt-summarizer-panel-content');
-        if (!content) {
-            console.error('Panel content area not found');
-            return;
-        }
+        if (!content) return;
 
         // First check if this is an error response from the backend
         if (summaryData.error || summaryData.data?.error) {
@@ -150,9 +144,9 @@ function displayPersistentSummary(summaryData) {
             // Handle other API errors with a generic message
             content.innerHTML = `
                 <div class="error-message">
-                    <div class="error-icon">❌</div>
+                    <div class="error-icon">ℹ️</div>
                     <div class="error-content">
-                        <p>Unable to generate summary. Please try again later.</p>
+                        <p>We're having trouble generating your summary. Please try again in a few minutes.</p>
                         <button class="login-button" style="margin-top: 16px;">Try Again</button>
                     </div>
                 </div>
@@ -164,7 +158,7 @@ function displayPersistentSummary(summaryData) {
             }
             return;
         }
-        
+
         // Continue with normal summary display if no errors
         let summaryContent;
         if (summaryData.response) {
@@ -174,10 +168,10 @@ function displayPersistentSummary(summaryData) {
         } else if (typeof summaryData === 'object' && summaryData.title && summaryData.body) {
             summaryContent = summaryData;
         } else {
-            throw new Error('Invalid response format');
+            throw new Error();
         }
 
-        // Clear existing content
+        // Clear existing content and display summary
         content.innerHTML = '';
         
         // Create title element
@@ -242,19 +236,16 @@ function displayPersistentSummary(summaryData) {
             content.appendChild(sectionElement);
         });
         
-    } catch (error) {
-        console.error('Error displaying persistent summary:', error);
-        console.error('Summary data:', summaryData);
-        
+    } catch {
         const panel = document.getElementById(PERSISTENT_PANEL_ID);
         if (panel) {
             const content = panel.querySelector('.yt-summarizer-panel-content');
             if (content) {
                 content.innerHTML = `
                     <div class="error-message">
-                        <div class="error-icon">❌</div>
+                        <div class="error-icon">ℹ️</div>
                         <div class="error-content">
-                            <p>Unable to display summary. Please try again later.</p>
+                            <p>We're having trouble displaying your summary. Please try again.</p>
                             <button class="login-button" style="margin-top: 16px;">Try Again</button>
                         </div>
                     </div>
@@ -417,17 +408,14 @@ new MutationObserver(() => {
 // Listen for messages from popup/service worker
 browserAPI.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'display_persistent_summary') {
-        console.log('Received request to display persistent summary');
         if (request.summaryData) {
             displayPersistentSummary(request.summaryData);
             sendResponse({ success: true });
         } else {
-            console.error('No summary data received');
             sendResponse({ success: false, error: 'No summary data received' });
         }
         return true;
     } else if (request.action === 'trigger_summarize') {
-        console.log('Received request to trigger summarization');
         handleSummarizeClick();
         sendResponse({ success: true });
         return true;
@@ -455,7 +443,6 @@ async function requestCookiePermissions() {
         }
         return true;
     } catch (error) {
-        console.error('Permission request failed:', error);
         throw error;
     }
 }
@@ -463,23 +450,18 @@ async function requestCookiePermissions() {
 // Updated handleSummarizeClick function
 async function handleSummarizeClick() {
     try {
-        console.log('Summarize button clicked');
-        
-        // Check authentication first
         const authResponse = await new Promise((resolve, reject) => {
             chrome.runtime.sendMessage({ action: 'checkAuth' }, (response) => {
                 if (chrome.runtime.lastError) {
-                    reject(chrome.runtime.lastError);
+                    reject(new Error('Authentication failed'));
                 } else {
                     resolve(response);
                 }
             });
         });
 
-        console.log('Auth check response:', authResponse);
-
         if (!authResponse.isAuthenticated) {
-            // Show login prompt if not authenticated
+            // Show login prompt
             let panel = document.getElementById(PERSISTENT_PANEL_ID);
             panel = panel || createPersistentPanel();
             const content = panel.querySelector('.yt-summarizer-panel-content');
@@ -522,7 +504,6 @@ async function handleSummarizeClick() {
                         throw new Error(authResult.error || 'Authentication failed');
                     }
                 } catch (error) {
-                    console.error('Login failed:', error);
                     content.innerHTML = `
                         <div class="error-message">
                             <div class="error-icon">❌</div>
@@ -576,7 +557,6 @@ async function handleSummarizeClick() {
 
         try {
             const currentUrl = window.location.href;
-            console.log('Current URL:', currentUrl);
             if (!currentUrl.includes('youtube.com/watch')) {
                 throw new Error('Not a YouTube video page');
             }
@@ -585,64 +565,36 @@ async function handleSummarizeClick() {
                 action: 'getYouTubeVideo',
                 videoUrl: currentUrl
             });
-            console.log('Video summary response:', response);
 
             clearInterval(messageInterval);
 
             if (!response.success) {
                 throw new Error(response.error || 'Failed to process video');
             }
-
-            console.log('Displaying summary data:', response.data);
             displayPersistentSummary(response.data);
         } catch (error) {
-            console.error('Summary request failed:', error);
             clearInterval(messageInterval);
             throw error;
         }
         
-    } catch (error) {
-        console.error('Error:', error);
-        
+    } catch {
         const panel = document.getElementById(PERSISTENT_PANEL_ID);
         if (panel) {
             const content = panel.querySelector('.yt-summarizer-panel-content');
             if (content) {
-                // Check if it's the free trial limit error
-                if (error.message?.includes('Free trial limit') || 
-                    (typeof error === 'object' && error.error === 'Free trial limit reached')) {
-                    content.innerHTML = `
-                        <div class="error-message">
-                            <div class="error-icon">ℹ️</div>
-                            <div class="error-content">
-                                <h3>Free Trial Limit Reached</h3>
-                                <p>You have used all 3 free summaries.</p>
-                                <p style="margin-top: 12px;">We're working on adding new subscription tiers with increased usage limits! 
-                                For early access or increased limits, please email:</p>
-                                <a href="mailto:ronaldchen4236@gmail.com" 
-                                   style="color: #2196F3; text-decoration: underline; display: block; margin-top: 8px;">
-                                   ronaldchen4236@gmail.com
-                                </a>
-                            </div>
+                content.innerHTML = `
+                    <div class="error-message">
+                        <div class="error-icon">ℹ️</div>
+                        <div class="error-content">
+                            <p>Something went wrong. Please try again.</p>
+                            <button class="login-button" style="margin-top: 16px;">Try Again</button>
                         </div>
-                    `;
-                } else {
-                    // Original error handling for other errors
-                    content.innerHTML = `
-                        <div class="error-message">
-                            <div class="error-icon">❌</div>
-                            <div class="error-content">
-                                <p>${error.message}</p>
-                                <button class="login-button" style="margin-top: 16px;">Try Again</button>
-                            </div>
-                        </div>
-                    `;
-                    
-                    // Add click handler for the retry button
-                    const retryButton = content.querySelector('.login-button');
-                    if (retryButton) {
-                        retryButton.addEventListener('click', handleSummarizeClick);
-                    }
+                    </div>
+                `;
+                
+                const retryButton = content.querySelector('.login-button');
+                if (retryButton) {
+                    retryButton.addEventListener('click', handleSummarizeClick);
                 }
             }
         }
