@@ -7,7 +7,6 @@ A Chrome extension that uses AI to generate concise summaries of YouTube videos,
 - **Instant Summaries**: Get AI-powered summaries of any YouTube video with a single click
 - **Rich Insights**: View key points, characters, quotes, and thematic elements
 - **User-Friendly**: Seamlessly integrates with the YouTube player interface
-- **Privacy-Focused**: No API keys required from users
 
 ## Recent Fixes and Improvements
 

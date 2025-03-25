@@ -42,14 +42,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   else if (request.action === 'getYouTubeVideo') {
+    console.log('Received getYouTubeVideo request:', request);
+    
     // Handle video summary request
     getAuthToken(false)
       .then(token => {
-        chrome.cookies.getAll({ domain: '.youtube.com' }, cookies => {
+        console.log('Got auth token:', token);
+        
+        chrome.cookies.getAll({ domain: '.youtube.com' }, (cookies) => {
+          if (chrome.runtime.lastError) {
+            console.error('Cookie error:', chrome.runtime.lastError);
+            return;
+          }
+          
+          console.log('Found YouTube cookies:', cookies);
+          
           const cookieString = cookies
             .filter(cookie => ['CONSENT', 'VISITOR_INFO1_LIVE'].includes(cookie.name))
             .map(cookie => `${cookie.name}=${cookie.value}`)
             .join('; ');
+          
+          console.log('Cookie string being sent:', cookieString);
+          
+          const requestBody = {
+            video_url: request.videoUrl,
+            cookies: cookieString || ''
+          };
+          
+          console.log('Sending request with body:', requestBody);
           
           fetch('https://youtube-summarizer-445521.appspot.com/summarize', {
             method: 'POST',
@@ -57,16 +77,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-              video_url: request.videoUrl,
-              cookies: cookieString
-            })
+            body: JSON.stringify(requestBody)
           })
-          .then(response => response.json())
-          .then(data => {
+          .then(async response => {
+            const data = await response.json();
+            console.log('API Response:', data); // Debug log
             sendResponse({ success: true, data: data });
           })
-          .catch(() => {
+          .catch((error) => {
+            console.error('API request failed:', error);
             sendResponse({
               success: false,
               error: "We're having trouble generating your summary. Please try again in a few minutes."
@@ -74,7 +93,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           });
         });
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error('Auth error:', error);
         sendResponse({ 
           success: false, 
           error: "Authentication failed. Please try again." 

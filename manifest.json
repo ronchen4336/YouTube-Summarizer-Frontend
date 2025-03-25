@@ -3,7 +3,8 @@
   "name": "YouTube Video Summarizer",
   "version": "1.0.0",
   "description": "Get AI-powered summaries of YouTube videos with key points, characters, and quotes",
-  "privacy_policy_url": "https://youtube-summarizer-445521.ue.r.appspot.com/privacy_policy",
+  "author": "your@email.com",
+  "homepage_url": "https://github.com/yourusername/youtube-summarizer",
   "permissions": [
     "identity",
     "identity.email",
@@ -14,7 +15,6 @@
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
-    "http://localhost:3000/*",
     "https://www.googleapis.com/*"
   ],
   "background": {

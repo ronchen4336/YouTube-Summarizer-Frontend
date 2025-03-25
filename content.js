@@ -6,9 +6,6 @@ const SUMMARY_BUTTON_ID = 'yt-summarizer-btn';
 const SUMMARY_PANEL_ID = 'yt-summarizer-panel';
 const PERSISTENT_PANEL_ID = 'yt-persistent-summary-panel';
 
-// Add a flag to track initialization
-let isInitialized = false;
-
 const LOADING_MESSAGES = [
     "Negotiating with YouTube's algorithm... 🤝",
     "Bribing the AI to summarize faster... 🍩🤖",
@@ -27,25 +24,44 @@ const LOADING_MESSAGES = [
     "Loading wit and charm into summaries... 🎩✨"
 ];
 
-// Create and inject the summary button
-function createSummaryButton() {
-    // Create the button
-    const button = document.createElement('button');
-    button.className = 'ytp-button yt-summarizer-button';
-    button.innerHTML = `
-        <span style="font-size: 16px; margin-right: 4px;">✨</span>
-        <span style="font-size: 13px;">Summarize</span>
-    `;
-    
-    // Add click handler
-    button.addEventListener('click', handleSummarizeClick);
-    
-    // Add to player controls
+// Add this near the top of your file after the constants
+let currentVideoId = null;
+
+// Create a single observer to handle button creation
+const observer = new MutationObserver(() => {
     const rightControls = document.querySelector('.ytp-right-controls');
-    if (rightControls) {
+    const videoId = getVideoId(window.location.href);
+    
+    // Only create button if we have controls, a video ID, and it's a new video
+    if (rightControls && videoId && videoId !== currentVideoId) {
+        currentVideoId = videoId;
+        
+        // Remove any existing buttons first
+        const existingButtons = document.querySelectorAll('.ytp-button[aria-label="Summarize video"]');
+        existingButtons.forEach(button => button.remove());
+        
+        // Create new button
+        const button = document.createElement('button');
+        button.className = 'ytp-button';
+        button.setAttribute('aria-label', 'Summarize video');
+        button.setAttribute('title', 'Summarize video');
+        
+        button.innerHTML = `
+            <svg height="100%" version="1.1" viewBox="0 0 36 36" width="100%">
+                <path d="M8 8h20v3H8zm4 6h12v3H12zm-4 6h20v3H8zm4 6h12v3H12z" fill="currentColor" class="ytp-svg-fill"/>
+            </svg>
+        `;
+        
+        button.addEventListener('click', handleSummarizeClick);
         rightControls.insertBefore(button, rightControls.firstChild);
     }
-}
+});
+
+// Start observing
+observer.observe(document.body, {
+    childList: true,
+    subtree: true
+});
 
 // Create persistent panel for the summary that stays open
 function createPersistentPanel() {
@@ -189,47 +205,49 @@ function displayPersistentSummary(summaryData) {
         bodySections.forEach(section => {
             const sectionElement = document.createElement('div');
             sectionElement.className = 'summary-section';
+            
+            // Add content type class
             if (section.metadata?.content_type) {
                 sectionElement.classList.add(`content-${section.metadata.content_type}`);
             }
             
-            sectionElement.setAttribute('data-section-type', section.metadata?.content_type || 'general');
+            // Create header container
+            const headerContainer = document.createElement('h3');
             
-            // Create subtitle
-            const subtitle = document.createElement('h3');
+            // Add subtitle
+            const subtitle = document.createElement('span');
             subtitle.textContent = section.subtitle;
-            sectionElement.appendChild(subtitle);
+            headerContainer.appendChild(subtitle);
             
-            // Create content based on display hint
+            // Add content type tag
+            if (section.metadata?.content_type) {
+                const tag = document.createElement('span');
+                tag.className = 'content-tag';
+                tag.textContent = section.metadata.content_type.replace('_', ' ');
+                headerContainer.appendChild(tag);
+            }
+            
+            sectionElement.appendChild(headerContainer);
+            
+            // Create content
             const contentElement = document.createElement('div');
             contentElement.className = 'section-content';
             
-            switch (section.metadata?.display_hint) {
-                case 'highlight':
-                    contentElement.className = 'highlight';
+            // Handle array or single string content
+            if (Array.isArray(section.body_content)) {
+                if (section.body_content.length === 1) {
                     contentElement.textContent = section.body_content[0];
-                    break;
-                    
-                case 'bullet_list':
+                } else {
                     const ul = document.createElement('ul');
-                    ul.className = 'bullet-list';
                     section.body_content.forEach(item => {
                         const li = document.createElement('li');
                         li.textContent = item;
                         ul.appendChild(li);
                     });
                     contentElement.appendChild(ul);
-                    break;
-                    
-                case 'paragraph':
-                default:
-                    contentElement.className = 'paragraph';
-                    section.body_content.forEach(text => {
-                        const p = document.createElement('p');
-                        p.textContent = text;
-                        contentElement.appendChild(p);
-                    });
-                    break;
+                }
+            } else {
+                contentElement.textContent = section.body_content;
             }
             
             sectionElement.appendChild(contentElement);
@@ -382,28 +400,6 @@ function createContentElement(content, displayHint) {
     
     return element;
 }
-
-// Initialize the extension
-async function initialize() {
-    const rightControls = document.querySelector('.ytp-right-controls');
-    if (rightControls) {
-        createSummaryButton();
-    } else {
-        setTimeout(initialize, 1000);
-    }
-}
-
-// Start when page loads
-initialize();
-
-// Handle YouTube's dynamic navigation
-let lastUrl = location.href;
-new MutationObserver(() => {
-    if (location.href !== lastUrl) {
-        lastUrl = location.href;
-        initialize();
-    }
-}).observe(document, {subtree: true, childList: true});
 
 // Listen for messages from popup/service worker
 browserAPI.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -615,3 +611,14 @@ function isYouTubeVideoUrl(url) {
 
 // Add this near the top of content.js
 window.handleSummarizeClick = handleSummarizeClick;
+
+// Add version logging for debugging
+const VERSION = '1.0.0'; // Match manifest version
+console.info(`YouTube Summarizer ${VERSION} initialized`);
+
+// Add error tracking
+window.onerror = function(msg, url, lineNo, columnNo, error) {
+    // Remove or modify console.error for production
+    console.error('Extension error:', {msg, url, lineNo, columnNo, error});
+    return false;
+};

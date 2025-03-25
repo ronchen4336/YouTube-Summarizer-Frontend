@@ -10,6 +10,10 @@ module.exports = {
     path: path.resolve(__dirname, 'dist'),
   },
   mode: 'production',
+  optimization: {
+    minimize: true,
+    usedExports: true,
+  },
   experiments: {
     topLevelAwait: true
   },
@@ -28,7 +32,13 @@ module.exports = {
         use: {
           loader: 'babel-loader',
           options: {
-            presets: ['@babel/preset-env'],
+            presets: [
+              ['@babel/preset-env', {
+                targets: {
+                  chrome: "88"
+                }
+              }]
+            ],
             plugins: ['@babel/plugin-transform-runtime']
           }
         }
